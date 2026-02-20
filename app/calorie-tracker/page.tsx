@@ -13,22 +13,69 @@ interface FoodEntry {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
-  notes?: string;
   created_at: string;
+}
+
+interface Goals {
+  goal_calories: number;
+  goal_protein_g: number;
+  goal_carbs_g: number;
+  goal_fat_g: number;
+  ai_explanation?: string;
+  goal?: string;
 }
 
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function MacroRing({ label, value, unit, color }: { label: string; value: number; unit: string; color: string }) {
+function MacroRing({
+  label,
+  value,
+  goal,
+  unit,
+  color,
+}: {
+  label: string;
+  value: number;
+  goal: number;
+  unit: string;
+  color: string;
+}) {
+  const pct = goal > 0 ? Math.min((value / goal) * 100, 100) : 0;
+  const r = 28;
+  const c = 2 * Math.PI * r;
+  const offset = c - (pct / 100) * c;
+  const isOver = goal > 0 && value > goal;
+
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className="w-16 h-16 rounded-full flex items-center justify-center border-[3px]" style={{ borderColor: color }}>
-        <span className="text-sm font-semibold text-stone-800">{Math.round(value)}</span>
+      <div className="relative w-[72px] h-[72px]">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r={r} fill="none" stroke="#f5f5f4" strokeWidth="4" />
+          <circle
+            cx="32"
+            cy="32"
+            r={r}
+            fill="none"
+            stroke={isOver ? "#ef4444" : color}
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={goal > 0 ? offset : c}
+            className="transition-all duration-700 ease-out"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className={`text-xs font-semibold ${isOver ? "text-red-500" : "text-stone-800"}`}>
+            {Math.round(value)}
+          </span>
+        </div>
       </div>
       <span className="text-[11px] text-stone-400 uppercase tracking-wide">{label}</span>
-      <span className="text-[10px] text-stone-300">{unit}</span>
+      {goal > 0 && (
+        <span className="text-[10px] text-stone-300">/ {Math.round(goal)} {unit}</span>
+      )}
     </div>
   );
 }
@@ -39,6 +86,8 @@ export default function CalorieTracker() {
   const [date, setDate] = useState(today());
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [allDates, setAllDates] = useState<string[]>([]);
+  const [goals, setGoals] = useState<Goals | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [imageData, setImageData] = useState<string | null>(null);
   const [manualText, setManualText] = useState("");
@@ -56,7 +105,22 @@ export default function CalorieTracker() {
     fat_g: entries.reduce((s, e) => s + e.fat_g, 0),
   };
 
-  // Redirect to login if not authenticated
+  // Check if user has a profile (onboarding)
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    fetch("/api/profile")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data || !data.goal_calories) {
+          router.push("/onboarding");
+        } else {
+          setGoals(data);
+          setProfileLoaded(true);
+        }
+      })
+      .catch(() => setProfileLoaded(true));
+  }, [status, router]);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
   }, [status, router]);
@@ -73,14 +137,13 @@ export default function CalorieTracker() {
   const fetchDates = useCallback(async () => {
     try {
       const res = await fetch("/api/entries?dates=1");
-      if (res.status === 401) return;
       const data = await res.json();
       setAllDates(Array.isArray(data) ? data : []);
     } catch { setAllDates([]); }
-  }, [router]);
+  }, []);
 
-  useEffect(() => { if (status === "authenticated") fetchEntries(); }, [fetchEntries, status]);
-  useEffect(() => { if (status === "authenticated") fetchDates(); }, [fetchDates, status]);
+  useEffect(() => { if (profileLoaded) fetchEntries(); }, [fetchEntries, profileLoaded]);
+  useEffect(() => { if (profileLoaded) fetchDates(); }, [fetchDates, profileLoaded]);
 
   async function handleAnalyze() {
     if (!imageData && !manualText.trim()) return;
@@ -102,21 +165,20 @@ export default function CalorieTracker() {
   async function handleSave() {
     if (!preview) return;
     setSaving(true);
-    const entry = {
-      id: crypto.randomUUID(),
-      date,
-      food_name: preview.food_name,
-      calories: preview.calories,
-      protein_g: preview.protein_g,
-      carbs_g: preview.carbs_g,
-      fat_g: preview.fat_g,
-      created_at: new Date().toISOString(),
-    };
     try {
       await fetch("/api/entries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(entry),
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          date,
+          food_name: preview.food_name,
+          calories: preview.calories,
+          protein_g: preview.protein_g,
+          carbs_g: preview.carbs_g,
+          fat_g: preview.fat_g,
+          created_at: new Date().toISOString(),
+        }),
       });
       setPreview(null); setImageData(null); setManualText(""); setShowAdd(false);
       fetchEntries(); fetchDates();
@@ -138,31 +200,34 @@ export default function CalorieTracker() {
     reader.readAsDataURL(file);
   }
 
-  function resetAdd() {
-    setShowAdd(false); setImageData(null); setManualText(""); setPreview(null);
-  }
-
-  // Loading state
-  if (status === "loading") {
+  if (status === "loading" || (status === "authenticated" && !profileLoaded)) {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center">
         <div className="text-sm text-stone-400">Loading...</div>
       </div>
     );
   }
-
   if (status !== "authenticated") return null;
+
+  const remaining = goals
+    ? {
+        calories: Math.max(0, goals.goal_calories - totals.calories),
+        protein_g: Math.max(0, goals.goal_protein_g - totals.protein_g),
+        carbs_g: Math.max(0, goals.goal_carbs_g - totals.carbs_g),
+        fat_g: Math.max(0, goals.goal_fat_g - totals.fat_g),
+      }
+    : null;
 
   return (
     <div className="max-w-2xl mx-auto px-6 pb-24">
       <nav className="flex items-center justify-between py-8 border-b border-stone-200">
         <Link href="/" className="text-sm font-medium text-stone-900 hover:text-stone-500 transition-colors">Tools</Link>
         <div className="flex items-center gap-4">
+          <Link href="/onboarding" className="text-xs text-stone-400 hover:text-stone-700 transition-colors">Edit goals</Link>
+          <span className="text-xs text-stone-300">·</span>
           <span className="text-xs text-stone-400">{session?.user?.email}</span>
           <button onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-xs text-stone-400 hover:text-stone-700 transition-colors">
-            Sign out
-          </button>
+            className="text-xs text-stone-400 hover:text-stone-700 transition-colors">Sign out</button>
         </div>
       </nav>
 
@@ -171,22 +236,32 @@ export default function CalorieTracker() {
         <p className="text-stone-400 text-sm">Snap a photo, get AI calorie estimates, track daily intake.</p>
       </header>
 
-      {/* Date picker */}
       <div className="flex items-center gap-3 mb-8">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
           className="text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 text-stone-700 focus:outline-none focus:ring-2 focus:ring-stone-300" />
         <button onClick={() => setDate(today())} className="text-xs text-stone-400 hover:text-stone-700 transition-colors">Today</button>
       </div>
 
-      {/* Macro summary */}
-      <div className="bg-white border border-stone-100 rounded-2xl p-6 mb-8">
+      {/* Macro rings with goals */}
+      <div className="bg-white border border-stone-100 rounded-2xl p-6 mb-4">
         <div className="flex items-center justify-around">
-          <MacroRing label="Calories" value={totals.calories} unit="kcal" color="#78716c" />
-          <MacroRing label="Protein" value={totals.protein_g} unit="g" color="#ef4444" />
-          <MacroRing label="Carbs" value={totals.carbs_g} unit="g" color="#f59e0b" />
-          <MacroRing label="Fat" value={totals.fat_g} unit="g" color="#3b82f6" />
+          <MacroRing label="Calories" value={totals.calories} goal={goals?.goal_calories || 0} unit="kcal" color="#78716c" />
+          <MacroRing label="Protein" value={totals.protein_g} goal={goals?.goal_protein_g || 0} unit="g" color="#ef4444" />
+          <MacroRing label="Carbs" value={totals.carbs_g} goal={goals?.goal_carbs_g || 0} unit="g" color="#f59e0b" />
+          <MacroRing label="Fat" value={totals.fat_g} goal={goals?.goal_fat_g || 0} unit="g" color="#3b82f6" />
         </div>
       </div>
+
+      {/* Remaining summary */}
+      {remaining && date === today() && (
+        <div className="text-center text-xs text-stone-400 mb-8">
+          {remaining.calories > 0 ? (
+            <span>{Math.round(remaining.calories)} kcal remaining today</span>
+          ) : (
+            <span className="text-red-400 font-medium">Daily calorie goal reached!</span>
+          )}
+        </div>
+      )}
 
       {!showAdd && (
         <button onClick={() => setShowAdd(true)}
@@ -199,7 +274,8 @@ export default function CalorieTracker() {
         <div className="bg-white border border-stone-100 rounded-2xl p-6 mb-8 space-y-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium text-stone-800">Add Food</h3>
-            <button onClick={resetAdd} className="text-xs text-stone-400 hover:text-stone-700">Cancel</button>
+            <button onClick={() => { setShowAdd(false); setImageData(null); setManualText(""); setPreview(null); }}
+              className="text-xs text-stone-400 hover:text-stone-700">Cancel</button>
           </div>
           <div>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
@@ -235,7 +311,6 @@ export default function CalorieTracker() {
         </div>
       )}
 
-      {/* Food log */}
       <div>
         <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-400 mb-4">
           {date === today() ? "Today's Log" : `Log for ${date}`}
