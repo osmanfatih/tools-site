@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curl Builder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="app-container">
+        <section class="input-panel">
+            <header class="app-header">
+                <h1>Curl Builder</h1>
+                <p class="subtitle">Generate complex curl commands instantly.</p>
+            </header>
+
+            <form id="curl-form">
+                <div class="form-group">
+                    <label for="method">Method</label>
+                    <select id="method" name="method">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="PATCH">PATCH</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="url">URL</label>
+                    <input type="text" id="url" name="url" required placeholder="https://api.example.com/v1/resource">
+                </div>
+
+                <div class="form-group">
+                    <div class="label-row">
+                        <label>Headers</label>
+                        <button type="button" id="add-header-btn" class="icon-btn" aria-label="Add Header">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        </button>
+                    </div>
+                    <div id="headers-container">
+                        <div class="header-row">
+                            <input type="text" name="header-key[]" placeholder="Key (e.g. Content-Type)">
+                            <input type="text" name="header-value[]" placeholder="Value (e.g. application/json)">
+                            <button type="button" class="remove-header-btn icon-btn" aria-label="Remove">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="auth-method">Authentication</label>
+                    <select id="auth-method" name="auth-method">
+                        <option value="none">None</option>
+                        <option value="basic">Basic Auth</option>
+                        <option value="bearer">Bearer Token</option>
+                    </select>
+                </div>
+
+                <div id="basic-auth-fields" class="hidden auth-fields">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password">
+                    </div>
+                </div>
+
+                <div id="bearer-auth-fields" class="hidden auth-fields">
+                    <div class="form-group">
+                        <label for="bearer-token">Token</label>
+                        <input type="text" id="bearer-token" name="bearer-token" placeholder="ey...">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="body">Request Body</label>
+                    <textarea id="body" name="body" rows="6" placeholder='{"key": "value"}'></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="primary-btn">Generate Command</button>
+                </div>
+            </form>
+        </section>
+
+        <aside class="output-panel">
+            <div class="sticky-content">
+                <h2>Generated Command</h2>
+                <div class="output-wrapper">
+                    <textarea id="output" readonly spellcheck="false"></textarea>
+                    <button id="copy-btn" class="secondary-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        Copy Command
+                    </button>
+                </div>
+            </div>
+        </aside>
+    </main>
+    <script src="script.js"></script>
+</body>
+</html>
