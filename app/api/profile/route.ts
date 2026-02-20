@@ -53,7 +53,7 @@ Provide a JSON response with exactly these fields:
 Be precise and consider BMR (Mifflin-St Jeor), activity level assumptions (moderate), and the stated goal. Adjust macros based on health conditions. Return ONLY valid JSON.`;
 
   const response = await client.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-5.2",
     temperature: 0,
     messages: [{ role: "user", content: prompt }],
     response_format: { type: "json_object" },
