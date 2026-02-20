@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface FoodEntry {
@@ -32,6 +34,8 @@ function MacroRing({ label, value, unit, color }: { label: string; value: number
 }
 
 export default function CalorieTracker() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [date, setDate] = useState(today());
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [allDates, setAllDates] = useState<string[]>([]);
@@ -52,24 +56,31 @@ export default function CalorieTracker() {
     fat_g: entries.reduce((s, e) => s + e.fat_g, 0),
   };
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login");
+  }, [status, router]);
+
   const fetchEntries = useCallback(async () => {
     try {
       const res = await fetch(`/api/entries?date=${date}`);
+      if (res.status === 401) { router.push("/login"); return; }
       const data = await res.json();
       setEntries(Array.isArray(data) ? data : []);
     } catch { setEntries([]); }
-  }, [date]);
+  }, [date, router]);
 
   const fetchDates = useCallback(async () => {
     try {
       const res = await fetch("/api/entries?dates=1");
+      if (res.status === 401) return;
       const data = await res.json();
       setAllDates(Array.isArray(data) ? data : []);
     } catch { setAllDates([]); }
-  }, []);
+  }, [router]);
 
-  useEffect(() => { fetchEntries(); }, [fetchEntries]);
-  useEffect(() => { fetchDates(); }, [fetchDates]);
+  useEffect(() => { if (status === "authenticated") fetchEntries(); }, [fetchEntries, status]);
+  useEffect(() => { if (status === "authenticated") fetchDates(); }, [fetchDates, status]);
 
   async function handleAnalyze() {
     if (!imageData && !manualText.trim()) return;
@@ -107,12 +118,8 @@ export default function CalorieTracker() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(entry),
       });
-      setPreview(null);
-      setImageData(null);
-      setManualText("");
-      setShowAdd(false);
-      fetchEntries();
-      fetchDates();
+      setPreview(null); setImageData(null); setManualText(""); setShowAdd(false);
+      fetchEntries(); fetchDates();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Save failed");
     } finally { setSaving(false); }
@@ -120,8 +127,7 @@ export default function CalorieTracker() {
 
   async function handleDelete(id: string) {
     await fetch(`/api/entries?id=${id}`, { method: "DELETE" });
-    fetchEntries();
-    fetchDates();
+    fetchEntries(); fetchDates();
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -136,11 +142,28 @@ export default function CalorieTracker() {
     setShowAdd(false); setImageData(null); setManualText(""); setPreview(null);
   }
 
+  // Loading state
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="text-sm text-stone-400">Loading...</div>
+      </div>
+    );
+  }
+
+  if (status !== "authenticated") return null;
+
   return (
     <div className="max-w-2xl mx-auto px-6 pb-24">
       <nav className="flex items-center justify-between py-8 border-b border-stone-200">
         <Link href="/" className="text-sm font-medium text-stone-900 hover:text-stone-500 transition-colors">Tools</Link>
-        <Link href="https://osmanfatihkilic.dev" className="text-sm text-stone-400 hover:text-stone-700 transition-colors">osmanfatihkilic.dev</Link>
+        <div className="flex items-center gap-4">
+          <span className="text-xs text-stone-400">{session?.user?.email}</span>
+          <button onClick={() => signOut({ callbackUrl: "/login" })}
+            className="text-xs text-stone-400 hover:text-stone-700 transition-colors">
+            Sign out
+          </button>
+        </div>
       </nav>
 
       <header className="pt-16 pb-10">
@@ -165,7 +188,6 @@ export default function CalorieTracker() {
         </div>
       </div>
 
-      {/* Add button */}
       {!showAdd && (
         <button onClick={() => setShowAdd(true)}
           className="w-full py-3 bg-stone-900 text-stone-50 text-sm font-medium rounded-xl hover:bg-stone-700 transition-colors mb-8">
@@ -173,14 +195,12 @@ export default function CalorieTracker() {
         </button>
       )}
 
-      {/* Add food panel */}
       {showAdd && (
         <div className="bg-white border border-stone-100 rounded-2xl p-6 mb-8 space-y-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium text-stone-800">Add Food</h3>
             <button onClick={resetAdd} className="text-xs text-stone-400 hover:text-stone-700">Cancel</button>
           </div>
-
           <div>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
             <button onClick={() => fileRef.current?.click()}
@@ -189,17 +209,14 @@ export default function CalorieTracker() {
             </button>
             {imageData && <img src={imageData} alt="Food preview" className="mt-3 rounded-xl max-h-48 mx-auto" />}
           </div>
-
           <div className="text-center text-xs text-stone-300 uppercase tracking-wide">or type manually</div>
           <input type="text" value={manualText} onChange={(e) => setManualText(e.target.value)}
             placeholder="e.g. Grilled chicken with rice"
             className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-700 placeholder:text-stone-300 focus:outline-none focus:ring-2 focus:ring-stone-300" />
-
           <button onClick={handleAnalyze} disabled={analyzing || (!imageData && !manualText.trim())}
             className="w-full py-3 bg-stone-800 text-stone-50 text-sm font-medium rounded-xl hover:bg-stone-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
             {analyzing ? "Analyzing..." : "🔍 Analyze"}
           </button>
-
           {preview && (
             <div className="border border-stone-100 rounded-xl p-4 space-y-3">
               <div className="text-sm font-medium text-stone-800">{preview.food_name}</div>
@@ -241,7 +258,6 @@ export default function CalorieTracker() {
         )}
       </div>
 
-      {/* History */}
       {allDates.length > 0 && (
         <div className="mt-12">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-400 mb-4">History</h2>
