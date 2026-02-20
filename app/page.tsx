@@ -4,7 +4,7 @@ const tools = [
   {
     name: "Curl Builder",
     desc: "Generate complex curl commands from parameters instantly.",
-    href: "/curl-builder/",
+    href: "/curl-builder",
   },
   {
     name: "Calorie Tracker",
