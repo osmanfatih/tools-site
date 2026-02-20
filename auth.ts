@@ -1,6 +1,5 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import Apple from "next-auth/providers/apple";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -8,30 +7,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     }),
-    ...(process.env.APPLE_ID
-      ? [
-          Apple({
-            clientId: process.env.APPLE_ID,
-            clientSecret: process.env.APPLE_SECRET!,
-          }),
-        ]
-      : []),
   ],
   pages: {
     signIn: "/login",
   },
   callbacks: {
-    async session({ session, token }) {
-      if (session.user && token.sub) {
-        session.user.id = token.sub;
-      }
-      return session;
-    },
-    async jwt({ token, account }) {
-      if (account) {
-        token.provider = account.provider;
+    async jwt({ token, profile }) {
+      // On initial sign-in, capture email from Google profile
+      if (profile?.email) {
+        token.email = profile.email;
       }
       return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        // Use email as the stable user ID — consistent across every login
+        session.user.id = token.email as string;
+      }
+      return session;
     },
   },
   session: {
